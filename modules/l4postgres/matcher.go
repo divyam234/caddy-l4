@@ -24,132 +24,145 @@
 package l4postgres
 
 import (
-    "encoding/binary"
-    "errors"
-    "io"
-    "sync"
+	"encoding/binary"
+	"errors"
+	"io"
+	"sync"
 
-    "github.com/caddyserver/caddy/v2"
-    "github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
-    "github.com/mholt/caddy-l4/layer4"
+	"github.com/caddyserver/caddy/v2"
+	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
+	"github.com/mholt/caddy-l4/layer4"
 )
 
 func init() {
-    caddy.RegisterModule(&MatchPostgres{})
+	caddy.RegisterModule(&MatchPostgres{})
 }
 
 const (
-    sslRequestCode = 80877103
-    initMessageSizeLength = 4
+	// Magic number to identify a SSLRequest message
+	sslRequestCode = 80877103
+	// byte size of the message length field
+	initMessageSizeLength = 4
 )
 
 // Buffer pools for reusing slices
 var (
-    headBufPool = sync.Pool{
-        New: func() interface{} {
-            return make([]byte, initMessageSizeLength)
-        },
-    }
-    
-    dataBufPool = sync.Pool{
-        New: func() interface{} {
-            return make([]byte, 0)
-        },
-    }
+	headBufPool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, initMessageSizeLength)
+		},
+	}
+
+	dataBufPool = sync.Pool{
+		New: func() interface{} {
+			return make([]byte, 0)
+		},
+	}
 )
 
+// Message provides readers for various types and
+// updates the offset after each read
+
 type message struct {
-    data   []byte
-    offset uint32
+	data   []byte
+	offset uint32
 }
 
 func (b *message) ReadUint32() (r uint32) {
-    r = binary.BigEndian.Uint32(b.data[b.offset : b.offset+4])
-    b.offset += 4
-    return r
+	r = binary.BigEndian.Uint32(b.data[b.offset : b.offset+4])
+	b.offset += 4
+	return r
 }
 
 func (b *message) ReadString() (r string) {
-    end := b.offset
-    maximum := uint32(len(b.data))
-    for ; end != maximum && b.data[end] != 0; end++ {
-    }
-    r = string(b.data[b.offset:end])
-    b.offset = end + 1
-    return r
+	end := b.offset
+	maximum := uint32(len(b.data))
+	for ; end != maximum && b.data[end] != 0; end++ {
+	}
+	r = string(b.data[b.offset:end])
+	b.offset = end + 1
+	return r
 }
 
+// NewMessageFromBytes wraps the raw bytes of a message to enable processing
 func newMessageFromBytes(b []byte) *message {
-    return &message{data: b}
+	return &message{data: b}
 }
 
+// StartupMessage contains the values parsed from the startup message
 type startupMessage struct {
-    ProtocolVersion uint32
-    Parameters      map[string]string
+	ProtocolVersion uint32
+	Parameters      map[string]string
 }
 
+// MatchPostgres is able to match Postgres connections.
 type MatchPostgres struct{}
 
+// CaddyModule returns the Caddy module information.
 func (*MatchPostgres) CaddyModule() caddy.ModuleInfo {
-    return caddy.ModuleInfo{
-        ID:  "layer4.matchers.postgres",
-        New: func() caddy.Module { return new(MatchPostgres) },
-    }
+	return caddy.ModuleInfo{
+		ID:  "layer4.matchers.postgres",
+		New: func() caddy.Module { return new(MatchPostgres) },
+	}
 }
 
+// Match returns true if the connection looks like the Postgres protocol.
 func (m *MatchPostgres) Match(cx *layer4.Connection) (bool, error) {
-    head := headBufPool.Get().([]byte)
-    defer headBufPool.Put(head)
+	// Get bytes containing the message length
+	head := headBufPool.Get().([]byte)
+	defer headBufPool.Put(head)
 
-    if _, err := io.ReadFull(cx, head); err != nil {
-        return false, err
-    }
+	if _, err := io.ReadFull(cx, head); err != nil {
+		return false, err
+	}
 
 	// Get actual message length
-    messageLength := binary.BigEndian.Uint32(head) - initMessageSizeLength
-    
-    data := dataBufPool.Get().([]byte)
-    if cap(data) < int(messageLength) {
-        data = make([]byte, messageLength)
-    } else {
-        data = data[:messageLength]
-    }
-    defer func() {
-        data = data[:0]
-        dataBufPool.Put(data)
-    }()
+	messageLength := binary.BigEndian.Uint32(head) - initMessageSizeLength
 
-    if _, err := io.ReadFull(cx, data); err != nil {
-        return false, err
-    }
+	data := dataBufPool.Get().([]byte)
+	if cap(data) < int(messageLength) {
+		data = make([]byte, messageLength)
+	} else {
+		data = data[:messageLength]
+	}
+	defer func() {
+		data = data[:0]
+		dataBufPool.Put(data)
+	}()
 
-    b := newMessageFromBytes(data)
+	if _, err := io.ReadFull(cx, data); err != nil {
+		return false, err
+	}
 
-    code := b.ReadUint32()
-    if code == sslRequestCode {
-        return true, nil
-    }
+	b := newMessageFromBytes(data)
+
+	// Check if it is a SSLRequest
+	code := b.ReadUint32()
+	if code == sslRequestCode {
+		return true, nil
+	}
 
 	// Check supported protocol
-    if majorVersion := code >> 16; majorVersion < 3 {
-        return false, errors.New("pg protocol < 3.0 is not supported")
-    }
+	if majorVersion := code >> 16; majorVersion < 3 {
+		return false, errors.New("pg protocol < 3.0 is not supported")
+	}
 
-    startup := &startupMessage{
-        ProtocolVersion: code,
-        Parameters:      make(map[string]string),
-    }
-    
-    for {
-        k := b.ReadString()
-        if k == "" {
-            break
-        }
-        startup.Parameters[k] = b.ReadString()
-    }
+	// Try parsing Postgres Params
+	startup := &startupMessage{
+		ProtocolVersion: code,
+		Parameters:      make(map[string]string),
+	}
+
+	for {
+		k := b.ReadString()
+		if k == "" {
+			break
+		}
+		startup.Parameters[k] = b.ReadString()
+	}
 	// TODO(metafeather): match on param values: user, database, options, etc
 
-    return len(startup.Parameters) > 0, nil
+	return len(startup.Parameters) > 0, nil
 }
 
 // UnmarshalCaddyfile sets up the MatchPostgres from Caddyfile tokens. Syntax:
@@ -159,20 +172,20 @@ func (m *MatchPostgres) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 	_, wrapper := d.Next(), d.Val() // consume wrapper name
 
 	// No same-line options are supported
-    if d.CountRemainingArgs() > 0 {
-        return d.ArgErr()
-    }
+	if d.CountRemainingArgs() > 0 {
+		return d.ArgErr()
+	}
 
 	// No blocks are supported
-    if d.NextBlock(d.Nesting()) {
-        return d.Errf("malformed layer4 connection matcher '%s': blocks are not supported", wrapper)
-    }
+	if d.NextBlock(d.Nesting()) {
+		return d.Errf("malformed layer4 connection matcher '%s': blocks are not supported", wrapper)
+	}
 
-    return nil
+	return nil
 }
 
 // Interface guards
 var (
-    _ layer4.ConnMatcher    = (*MatchPostgres)(nil)
-    _ caddyfile.Unmarshaler = (*MatchPostgres)(nil)
+	_ layer4.ConnMatcher    = (*MatchPostgres)(nil)
+	_ caddyfile.Unmarshaler = (*MatchPostgres)(nil)
 )
