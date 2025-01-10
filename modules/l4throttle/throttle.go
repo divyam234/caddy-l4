@@ -26,7 +26,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 
-	"github.com/mholt/caddy-l4/layer4"
+	"github.com/divyam234/caddy-l4/layer4"
 )
 
 func init() {

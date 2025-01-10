@@ -32,9 +32,9 @@ import (
 	"github.com/mastercactapus/proxyprotocol"
 	"go.uber.org/zap"
 
-	"github.com/mholt/caddy-l4/layer4"
-	"github.com/mholt/caddy-l4/modules/l4proxyprotocol"
-	"github.com/mholt/caddy-l4/modules/l4tls"
+	"github.com/divyam234/caddy-l4/layer4"
+	"github.com/divyam234/caddy-l4/modules/l4proxyprotocol"
+	"github.com/divyam234/caddy-l4/modules/l4tls"
 )
 
 func init() {

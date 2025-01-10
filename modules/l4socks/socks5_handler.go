@@ -10,7 +10,7 @@ import (
 	"github.com/things-go/go-socks5"
 	"go.uber.org/zap"
 
-	"github.com/mholt/caddy-l4/layer4"
+	"github.com/divyam234/caddy-l4/layer4"
 )
 
 func init() {

@@ -27,7 +27,7 @@ import (
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 
-	"github.com/mholt/caddy-l4/layer4"
+	"github.com/divyam234/caddy-l4/layer4"
 )
 
 // LoadBalancing has parameters related to load balancing.

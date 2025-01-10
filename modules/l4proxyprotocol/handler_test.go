@@ -10,7 +10,7 @@ import (
 	"github.com/caddyserver/caddy/v2"
 	"go.uber.org/zap"
 
-	"github.com/mholt/caddy-l4/layer4"
+	"github.com/divyam234/caddy-l4/layer4"
 )
 
 func assertString(t *testing.T, expected string, value string) {

@@ -11,7 +11,7 @@ import (
 
 	"github.com/caddyserver/caddy/v2/caddytest"
 
-	_ "github.com/mholt/caddy-l4"
+	_ "github.com/divyam234/caddy-l4"
 )
 
 func TestCaddyfileAdaptToJSON(t *testing.T) {

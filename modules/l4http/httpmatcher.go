@@ -29,8 +29,8 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 
-	"github.com/mholt/caddy-l4/layer4"
-	"github.com/mholt/caddy-l4/modules/l4tls"
+	"github.com/divyam234/caddy-l4/layer4"
+	"github.com/divyam234/caddy-l4/modules/l4tls"
 )
 
 func init() {

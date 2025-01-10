@@ -60,7 +60,7 @@ jobs:
 
     - name: Build
       run: |
-        xcaddy build master --output ${{ runner.temp }}/${{ matrix.name }} --with github.com/mholt/caddy-l4=./
+        xcaddy build master --output ${{ runner.temp }}/${{ matrix.name }} --with github.com/divyam234/caddy-l4=./
         # smoking test
         echo ''
         echo '########'
@@ -81,7 +81,7 @@ jobs:
     - name: Test
       run: |
         # TODO:
-        # github.com/mholt/caddy-l4,
+        # github.com/divyam234/caddy-l4,
         # modules/l4echo,
         # modules/l4postgres,
         # modules/l4ssh,
